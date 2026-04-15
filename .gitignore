@@ -1,0 +1,14 @@
+# Credentials — never commit these
+.env
+
+# Databases contain personal report data — keep private
+*.db
+*.db-shm
+*.db-wal
+
+# Build output
+hack-with-MCP
+hack-with-MCP.exe
+
+# Go
+vendor/
