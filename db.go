@@ -104,6 +104,49 @@ func migratePersonalDB() error {
 		CREATE INDEX IF NOT EXISTS idx_reports_severity ON reports(severity_rating);
 		CREATE INDEX IF NOT EXISTS idx_reports_state    ON reports(state);
 		CREATE INDEX IF NOT EXISTS idx_scopes_program   ON scopes(program_handle);
+
+		CREATE TABLE IF NOT EXISTS intigriti_programs (
+			id          TEXT PRIMARY KEY,
+			handle      TEXT,
+			name        TEXT,
+			status      TEXT,
+			reward_type TEXT,
+			min_bounty  REAL DEFAULT 0,
+			max_bounty  REAL DEFAULT 0,
+			currency    TEXT
+		);
+
+		CREATE TABLE IF NOT EXISTS intigriti_scopes (
+			id          TEXT PRIMARY KEY,
+			program_id  TEXT,
+			endpoint    TEXT,
+			type        TEXT,
+			tier        TEXT,
+			description TEXT,
+			in_scope    INTEGER DEFAULT 1
+		);
+
+		CREATE TABLE IF NOT EXISTS intigriti_submissions (
+			id           TEXT PRIMARY KEY,
+			title        TEXT,
+			status       TEXT,
+			severity     TEXT,
+			vuln_type    TEXT,
+			program_id   TEXT,
+			program_name TEXT,
+			asset        TEXT,
+			asset_type   TEXT,
+			bounty       REAL DEFAULT 0,
+			currency     TEXT,
+			created_at   TEXT,
+			closed_at    TEXT
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_inti_prog_handle ON intigriti_programs(handle);
+		CREATE INDEX IF NOT EXISTS idx_inti_scope_prog  ON intigriti_scopes(program_id);
+		CREATE INDEX IF NOT EXISTS idx_inti_sub_prog    ON intigriti_submissions(program_id);
+		CREATE INDEX IF NOT EXISTS idx_inti_sub_status  ON intigriti_submissions(status);
+		CREATE INDEX IF NOT EXISTS idx_inti_sub_sev     ON intigriti_submissions(severity);
 	`)
 	return err
 }

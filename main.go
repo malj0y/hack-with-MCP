@@ -27,7 +27,16 @@ func main() {
 	}
 
 	// Build H1 API client
-	client := newH1Client(username, token)
+	h1Client := newH1Client(username, token)
+
+	// Build Intigriti client (optional — warn but don't crash if token missing)
+	var intigritiClient *IntigritiClient
+	if intigritiToken := os.Getenv("INTIGRITI_PAT"); intigritiToken != "" {
+		intigritiClient = newIntigritiClient(intigritiToken)
+		log.Println("[hack-with-MCP] Intigriti client initialised")
+	} else {
+		log.Println("[hack-with-MCP] INTIGRITI_PAT not set — Intigriti tools disabled")
+	}
 
 	// Create MCP server
 	s := server.NewMCPServer(
@@ -37,12 +46,15 @@ func main() {
 	)
 
 	// --- Register all tools ---
-	registerFetchTools(s, client)
+	registerFetchTools(s, h1Client)
 	registerSearchTools(s)
-	registerHackTools(s, client)
-	registerReportTools(s, client)
-	registerProgramTools(s, client)
-	registerWriteTools(s, client)
+	registerHackTools(s, h1Client)
+	registerReportTools(s, h1Client)
+	registerProgramTools(s, h1Client)
+	registerWriteTools(s, h1Client)
+	if intigritiClient != nil {
+		registerIntigritiTools(s, intigritiClient)
+	}
 
 	log.Println("[hack-with-MCP] server started")
 	if err := server.ServeStdio(s); err != nil {
