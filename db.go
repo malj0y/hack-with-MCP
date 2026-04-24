@@ -113,7 +113,8 @@ func migratePersonalDB() error {
 			reward_type TEXT,
 			min_bounty  REAL DEFAULT 0,
 			max_bounty  REAL DEFAULT 0,
-			currency    TEXT
+			currency    TEXT,
+			created_at  TEXT
 		);
 
 		CREATE TABLE IF NOT EXISTS intigriti_scopes (
@@ -148,7 +149,12 @@ func migratePersonalDB() error {
 		CREATE INDEX IF NOT EXISTS idx_inti_sub_status  ON intigriti_submissions(status);
 		CREATE INDEX IF NOT EXISTS idx_inti_sub_sev     ON intigriti_submissions(severity);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	// Add created_at to existing DBs that predate this column — safe to ignore if already present.
+	personalDB.Exec(`ALTER TABLE intigriti_programs ADD COLUMN created_at TEXT`)
+	return nil
 }
 
 // --- Disclosed DB ---

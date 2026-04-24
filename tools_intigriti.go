@@ -35,6 +35,7 @@ func registerIntigritiTools(s *server.MCPServer, client *IntigritiClient) {
 		mcp.WithDescription("Search your synced Intigriti programs."),
 		mcp.WithString("query", mcp.Description("Handle or name search")),
 		mcp.WithString("bounty_only", mcp.Description("'true' to filter bounty programs only")),
+		mcp.WithString("sort", mcp.Description("Sort order: 'newest' (default), 'oldest', 'name'")),
 		mcp.WithNumber("limit", mcp.Description("Max results (default 20)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return intigritiSearchProgramsHandler(req)
@@ -69,15 +70,17 @@ func intigrititFetchProgramsHandler(ctx context.Context, client *IntigritiClient
 		rewardType := ival(p, "rewardType")
 		minVal, currency := ibounty(p, "minBounty")
 		maxVal, _ := ibounty(p, "maxBounty")
+		createdAt := istr(p, "createdAt")
 
 		_, err := personalDB.Exec(
-			`INSERT INTO intigriti_programs (id, handle, name, status, reward_type, min_bounty, max_bounty, currency)
-			 VALUES (?,?,?,?,?,?,?,?)
+			`INSERT INTO intigriti_programs (id, handle, name, status, reward_type, min_bounty, max_bounty, currency, created_at)
+			 VALUES (?,?,?,?,?,?,?,?,?)
 			 ON CONFLICT(id) DO UPDATE SET
 				handle=excluded.handle, name=excluded.name, status=excluded.status,
 				reward_type=excluded.reward_type, min_bounty=excluded.min_bounty,
-				max_bounty=excluded.max_bounty, currency=excluded.currency`,
-			id, handle, name, status, rewardType, minVal, maxVal, currency,
+				max_bounty=excluded.max_bounty, currency=excluded.currency,
+				created_at=excluded.created_at`,
+			id, handle, name, status, rewardType, minVal, maxVal, currency, createdAt,
 		)
 		if err == nil {
 			upserted++
@@ -242,6 +245,7 @@ func intigritiGetProgramHandler(ctx context.Context, client *IntigritiClient, pr
 func intigritiSearchProgramsHandler(req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	query, _ := req.GetArguments()["query"].(string)
 	bountyOnly, _ := req.GetArguments()["bounty_only"].(string)
+	sort, _ := req.GetArguments()["sort"].(string)
 	limit := 20
 	if v, ok := req.GetArguments()["limit"].(float64); ok && v > 0 {
 		limit = int(v)
@@ -260,11 +264,20 @@ func intigritiSearchProgramsHandler(req mcp.CallToolRequest) (*mcp.CallToolResul
 	if len(conds) > 0 {
 		where = strings.Join(conds, " AND ")
 	}
+
+	orderBy := "created_at DESC, name ASC" // newest first by default
+	switch sort {
+	case "oldest":
+		orderBy = "created_at ASC, name ASC"
+	case "name":
+		orderBy = "name ASC"
+	}
+
 	args = append(args, limit)
 
 	rows, err := personalDB.Query(
-		fmt.Sprintf(`SELECT id, handle, name, status, reward_type, min_bounty, max_bounty, currency
-		 FROM intigriti_programs WHERE %s ORDER BY name LIMIT ?`, where),
+		fmt.Sprintf(`SELECT id, handle, name, status, reward_type, min_bounty, max_bounty, currency, created_at
+		 FROM intigriti_programs WHERE %s ORDER BY %s LIMIT ?`, where, orderBy),
 		args...,
 	)
 	if err != nil {
@@ -274,14 +287,18 @@ func intigritiSearchProgramsHandler(req mcp.CallToolRequest) (*mcp.CallToolResul
 
 	var lines []string
 	for rows.Next() {
-		var id, handle, name, status, rewardType, currency string
+		var id, handle, name, status, rewardType, currency, createdAt string
 		var minB, maxB float64
-		rows.Scan(&id, &handle, &name, &status, &rewardType, &minB, &maxB, &currency)
+		rows.Scan(&id, &handle, &name, &status, &rewardType, &minB, &maxB, &currency, &createdAt)
 		bountyStr := ""
 		if minB > 0 || maxB > 0 {
 			bountyStr = fmt.Sprintf(" [%.0f–%.0f %s]", minB, maxB, currency)
 		}
-		lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s — %s%s", name, handle, status, rewardType, bountyStr))
+		dateStr := ""
+		if len(createdAt) >= 10 {
+			dateStr = fmt.Sprintf(" (%s)", createdAt[:10])
+		}
+		lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s — %s%s%s", name, handle, status, rewardType, bountyStr, dateStr))
 	}
 
 	if len(lines) == 0 {
